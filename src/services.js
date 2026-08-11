@@ -145,8 +145,31 @@ export async function broadcastTx(hex, expectedTxid) {
   try { const j = JSON.parse(raw); if (j && typeof j.txid === "string") text = j.txid; } catch {}
   if (res.ok && /^[0-9a-fA-F]{64}$/.test(text)) return text.toLowerCase();
   const msg = raw.toLowerCase();
-  if (msg.includes("already") || msg.includes("known") || msg.includes("txn-already")) {
-    return expectedTxid; // idempotent: it's on the network, that's success
+  // H1 — this used to be a substring match on "known", and "unknown" contains
+  // "known". Any upstream failure with the word "unknown" in it — a Cloudflare
+  // error page, "unknown host", a 500 body — was read as a SUCCESSFUL
+  // broadcast. The recipient saw "received", the transaction did not exist,
+  // and the payment reference was consumed. Reproduced by the reviewer with a
+  // 500 "unknown host" response.
+  //
+  // Two changes: match whole phrases rather than substrings, and only treat a
+  // duplicate as success when the upstream actually answered (an HTTP error is
+  // never an idempotent success).
+  const ALREADY_KNOWN = [
+    "already in the mempool",
+    "already in mempool",
+    "already known",
+    "txn-already-known",
+    "txn-already-in-mempool",
+    "transaction already in block chain",
+    "already have transaction",
+    "duplicate transaction",
+  ];
+  // Note: a duplicate legitimately arrives with a non-2xx status (WhatsOnChain
+  // answers 409), so the status is deliberately NOT part of this test. The
+  // phrase list is what does the work.
+  if (expectedTxid && ALREADY_KNOWN.some((phrase) => msg.includes(phrase))) {
+    return expectedTxid; // idempotent: it is on the network, that is success
   }
   throw httpErr(502, "broadcast_failed", "could not broadcast transaction");
 }

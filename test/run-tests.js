@@ -56,12 +56,21 @@ const broadcaster = createServer(async (req, res) => {
   // WoC-vorm (v1.0.1): {"txhex"} in; txid als quoted tekst uit, fouten als
   // platte tekst — de mock spreekt exact wat de echte broadcaster spreekt.
   const { txhex } = JSON.parse(body);
+  // H1 regression hook: when armed, the mock answers like a failing upstream
+  // instead of a broadcaster. Set broadcasterFailure to the body it should
+  // return; the status comes with it.
+  if (broadcasterFailure) {
+    res.writeHead(broadcasterFailure.status, { "content-type": "text/plain" });
+    res.end(broadcasterFailure.body);
+    return;
+  }
   const txid = txidOf(txhex);
   const dup = seen.has(txid);
   seen.add(txid);
   res.writeHead(dup ? 409 : 200, { "content-type": "text/plain" });
   res.end(dup ? "txn-already-known" : JSON.stringify(txid));
 });
+let broadcasterFailure = null;
 
 // --- tiny tx builder (1 dummy input, given outputs) ---
 function varint(n) {
@@ -239,6 +248,47 @@ console.log("\n[e2e] receive negatives (§8.5)");
 
   r = await call("POST", "/bsvalias/p2p-payment-destination/pay@alexander.web3", { satoshis: -5 });
   check("negative satoshis -> 400", r.status === 400);
+}
+
+/* ------------------------------------------------------------ *
+ * H1 — an upstream failure must never read as a successful broadcast
+ *
+ * The old code matched the substring "known", and "unknown" contains it.
+ * Every upstream error carrying that word — a Cloudflare page, "unknown
+ * host", a 500 — was reported to the sender as a completed payment while
+ * no transaction existed and the reference had been consumed.
+ * ------------------------------------------------------------ */
+console.log("\n[H1] upstream failures are failures");
+{
+  const cases = [
+    ["500 unknown host", { status: 500, body: "unknown host" }],
+    ["502 upstream unknown error", { status: 502, body: "Error: unknown" }],
+    ["503 gateway page mentioning unknown", { status: 503, body: "<html><body>Unknown backend</body></html>" }],
+    ["404 unknown method", { status: 404, body: "unknown method" }],
+    ["500 generic outage", { status: 500, body: "internal server error" }],
+  ];
+  for (const [label, failure] of cases) {
+    let r = await call("POST", "/bsvalias/p2p-payment-destination/pay@alexander.web3", { satoshis: 4321 });
+    const ref = r.body.reference;
+    const tx = buildTx(r.body.outputs);
+    broadcasterFailure = failure;
+    r = await call("POST", "/bsvalias/receive-transaction/pay@alexander.web3", { hex: tx, reference: ref });
+    broadcasterFailure = null;
+    check(`${label} -> reported as a failure, not a txid`, r.status >= 400 && !r.body.txid);
+  }
+}
+
+console.log("\n[H1] genuine duplicates are still idempotent");
+{
+  // A real broadcaster answers a duplicate with a non-2xx status, so the
+  // status must not be part of the test — only the phrase.
+  let r = await call("POST", "/bsvalias/p2p-payment-destination/pay@alexander.web3", { satoshis: 5555 });
+  const ref = r.body.reference;
+  const tx = buildTx(r.body.outputs);
+  broadcasterFailure = { status: 409, body: "txn-already-known" };
+  r = await call("POST", "/bsvalias/receive-transaction/pay@alexander.web3", { hex: tx, reference: ref });
+  broadcasterFailure = null;
+  check("409 txn-already-known still returns the txid", r.status === 200 && r.body.txid === txidOf(tx));
 }
 
 console.log(`\nRESULT: ${passed} passed, ${failed} failed`);

@@ -81,7 +81,7 @@ curl -s -X POST https://sns.ordnet.io/bsvalias/address/info@earthlog.web3 \
 npm test
 ```
 
-49 tests on bare Node: handle parsing, TLD gating, capability document,
+55 tests on bare Node: handle parsing, TLD gating, capability document,
 pki / paymentDestination / P2P flows, fallback disclosure, error shapes,
 and rate limiting.
 
