@@ -1,0 +1,13 @@
+{
+  "name": "@ordnet/bsvalias-bridge",
+  "version": "1.2.0",
+  "description": "Paymail (bsvalias) compatibility bridge for native web3 names — the reference implementation of ODNCA-STD-009.",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": { "start": "node src/server.js", "test": "node test/run-tests.js" },
+  "repository": { "type": "git", "url": "https://github.com/ORDNET/ORDnet-bsvalias-bridge.git" },
+  "keywords": ["bsv", "paymail", "bsvalias", "sns", "web3", "domains", "odnca"],
+  "author": "ORDnet / ODNCA",
+  "license": "MIT",
+  "engines": { "node": ">=20" }
+}

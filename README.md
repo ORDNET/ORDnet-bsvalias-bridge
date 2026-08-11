@@ -1,0 +1,95 @@
+# ORDnet-bsvalias-bridge
+
+Paymail (bsvalias) compatibility bridge for **native web3 names**: lets any
+existing paymail wallet (HandCash, Centbee, ElectrumSV, RelayX, …) pay
+`info@earthlog.web3` today — with its existing bsvalias client and **one
+extra line of code** on the wallet side.
+
+This is the reference implementation of
+[ODNCA-STD-009 · Paymail Compatibility Profile](https://github.com/ORDNET/ODNCA-standards/blob/main/ODNCA-STD-009-Paymail-Compatibility-Profile.md),
+live behind `https://sns.ordnet.io/.well-known/bsvalias`.
+
+**Zero dependencies.** Node ≥ 20 (built-in `fetch`). No `npm install`.
+
+## What it does
+
+The bridge serves exactly one handle form — **`mailbox@name.tld`** where the
+TLD is a recognised web3 TLD (`info@earthlog.web3`). Behind the standard
+bsvalias capability document (`pki`, `paymentDestination`, the P2P pair),
+answers come from the on-chain name state via a conformant SNS resolver
+(ODNCA-STD-001) instead of a customer database — the calling wallet cannot
+tell the difference, and does not need to.
+
+- Mailbox semantics follow the name standard: the holder of a mailbox is by
+  definition the holder of the domain; an unknown mailbox still pays the
+  domain holder.
+- There is **no house-domain aliasing**: a web3 name is addressed as itself,
+  never as an alias under someone else's domain. Any non-web3 handle domain
+  answers a clean `404 unknown_domain`.
+- The recognised TLD set loads **live** from the resolver `/health`
+  (`tlds` + `retired_tlds`, refreshed every 10 minutes); an env fallback
+  covers startup and outages.
+- Identity (pki / profile / avatar) anchors on the domain name; payment
+  resolution uses the full handle.
+
+## Run
+
+```bash
+node src/server.js
+```
+
+Configuration is entirely via environment variables (defaults in
+`src/config.js`):
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `BRIDGE_PUBLIC_BASE_URL` | `https://sns.ordnet.io` | Public URL used inside the capability document |
+| `SNS_RESOLVER_URL` | `http://127.0.0.1:8790` | Resolver base URL — keep on localhost / in-proc |
+| `BRIDGE_SNS_TLDS` | snapshot list | Fallback TLD set until the first live `/health` refresh |
+| `BRIDGE_TLD_REFRESH_MS` | `600000` | Live TLD refresh interval |
+| `BRIDGE_BROADCAST_URL` | WhatsOnChain `tx/raw` | Broadcast endpoint for P2P receive |
+| `BRIDGE_HOST` / `BRIDGE_PORT` | `127.0.0.1` / `8082` | Listen address (put your TLS proxy in front) |
+| `BRIDGE_REFERENCE_FILE` | `./references.json` | Persistence for issued P2P references |
+| `BRIDGE_REFERENCE_TTL_MS` | 24 h | Reference lifetime |
+| `BRIDGE_RATE_GENERAL` / `BRIDGE_RATE_RECEIVE` | `120` / `20` | Per-IP per-minute limits |
+| `BRIDGE_RESOLVER_CACHE_MS` | `300000` | Mirror of the resolver's 300 s answer TTL |
+| `BRIDGE_AVATAR_BASE_URL` | `https://sns.ordnet.io/avatar` | Public-profile avatar source |
+
+Operational notes:
+
+- Internal fetches never follow redirects; resolver refusals never fall
+  through to stale cache (negative answers are cached as negatives).
+- The reference store is file-backed; swap `src/store.js` for Redis/SQLite
+  when running more than one instance.
+- Run behind a TLS-terminating proxy that forwards
+  `/.well-known/bsvalias` and `/bsvalias/` to the bridge port.
+
+## Try it
+
+Against the live deployment, with nothing but curl:
+
+```bash
+curl -s https://sns.ordnet.io/.well-known/bsvalias | jq .
+curl -s -X POST https://sns.ordnet.io/bsvalias/address/info@earthlog.web3 \
+  -H 'content-type: application/json' -d '{}' | jq .
+# -> { "output": "76a914…88ac" }  — the current on-chain holder's locking script
+```
+
+## Tests
+
+```bash
+npm test
+```
+
+49 tests on bare Node: handle parsing, TLD gating, capability document,
+pki / paymentDestination / P2P flows, fallback disclosure, error shapes,
+and rate limiting.
+
+## Related
+
+- [ODNCA-standards](https://github.com/ORDNET/ODNCA-standards) — STD-009 (this profile) and the full specification set
+- [ORDnet-SNS-client](https://github.com/ORDNET/ORDnet-SNS-client) — native resolution with signed-answer verification (the upgrade path beyond paymail)
+
+## License
+
+MIT © ORDnet / ODNCA
