@@ -11,6 +11,30 @@
 import { createServer } from "node:http";
 import { config } from "./config.js";
 import { mapHandle, httpErr, resolveName, pubkeyForName, broadcastTx, rateLimit } from "./services.js";
+
+/**
+ * Percent-decode without ever throwing.
+ *
+ * decodeURIComponent raises URIError on malformed input ("%ZZ", a lone "%", a
+ * truncated escape), and an uncaught throw in a Node request handler is fatal
+ * to the process. The Merkle-Resolver hit exactly this (its K3) and fixed it;
+ * this file kept the raw call and answered 500 on `GET /bsvalias/id/%ZZ`.
+ * Fixing it in one repository and not the other is the drift that copy-paste
+ * causes — hence the shared-core work on the roadmap.
+ *
+ * Returns null for undecodable input; callers treat that as a malformed
+ * request, which is what it is.
+ */
+const MAX_HANDLE_LEN = 2100; // SNS-NAME-1 caps a name at 2048 bytes
+function safeDecode(segment) {
+  if (typeof segment !== "string" || segment.length === 0) return "";
+  if (segment.length > MAX_HANDLE_LEN) return null;
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return null;
+  }
+}
 import { ReferenceStore } from "./store.js";
 import { parseTx, txPaysOutputs } from "./tx.js";
 
@@ -54,7 +78,8 @@ async function readJsonBody(req, maxBytes = 2_000_000) {
 
 /** Parse `{alias}@{domain.tld}` from a path segment (URL-decoded). */
 function parsePaymail(segment) {
-  const handle = decodeURIComponent(segment || "");
+  const handle = safeDecode(segment);
+  if (handle === null) throw httpErr(400, "malformed_handle", "handle is not valid percent-encoded text");
   const at = handle.lastIndexOf("@");
   if (at <= 0 || at === handle.length - 1) throw httpErr(400, "malformed_handle", "expected alias@domain.tld");
   return { handle, alias: handle.slice(0, at), domain: handle.slice(at + 1) };
@@ -109,7 +134,9 @@ async function handleAddress(req, res, paymail) {
 async function handleVerifyPubkey(res, paymail, pubkeyParam) {
   const { name, domainName } = await mapHandle(paymail.alias, paymail.domain);
   await resolveName(name);
-  const candidate = decodeURIComponent(pubkeyParam || "").toLowerCase();
+  const decodedPubkey = safeDecode(pubkeyParam);
+  if (decodedPubkey === null) throw httpErr(400, "invalid_pubkey", "pubkey is not valid percent-encoded text");
+  const candidate = decodedPubkey.toLowerCase();
   let match = false;
   try { match = (await pubkeyForName(domainName)) === candidate; }
   catch (e) { if (e.code !== "no_pki") throw e; } // no published key => match:false
