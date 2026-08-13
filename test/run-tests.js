@@ -291,6 +291,29 @@ console.log("\n[H1] genuine duplicates are still idempotent");
   check("409 txn-already-known still returns the txid", r.status === 200 && r.body.txid === txidOf(tx));
 }
 
+/* ------------------------------------------------------------ *
+ * Malformed percent-escapes are a 4xx, never a 500 or a crash
+ *
+ * The Merkle-Resolver fixed this class in v1.0.1; this file kept the raw
+ * decodeURIComponent, so `GET /bsvalias/id/%ZZ` answered 500. Same bug,
+ * different repo — the cost of copy-pasted code.
+ * ------------------------------------------------------------ */
+console.log("\n[hostile input]");
+{
+  for (const [label, path] of [
+    ["invalid hex", "/bsvalias/id/%ZZ"],
+    ["lone percent", "/bsvalias/id/%"],
+    ["truncated escape", "/bsvalias/id/%E0%A4"],
+    ["percent at end", "/bsvalias/id/pay@alexander.web3%"],
+    ["malformed on p2p-dest", "/bsvalias/p2p-payment-destination/%ZZ"],
+  ]) {
+    const r = await call("GET", path);
+    check(`${label} -> 4xx, not 5xx`, r.status >= 400 && r.status < 500, `got ${r.status}`);
+  }
+  const alive = await call("GET", "/.well-known/bsvalias");
+  check("the bridge is STILL ALIVE after the malformed batch", alive.status === 200);
+}
+
 console.log(`\nRESULT: ${passed} passed, ${failed} failed`);
 server.close(); resolver.close(); broadcaster.close();
 process.exit(failed === 0 ? 0 : 1);
