@@ -1,6 +1,6 @@
 {
   "name": "@ordnet/bsvalias-bridge",
-  "version": "1.2.1",
+  "version": "1.3.1",
   "description": "Paymail (bsvalias) compatibility bridge for native web3 names — the reference implementation of ODNCA-STD-009.",
   "type": "module",
   "main": "src/server.js",

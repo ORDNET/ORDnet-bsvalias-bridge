@@ -72,8 +72,27 @@ Against the live deployment, with nothing but curl:
 curl -s https://sns.ordnet.io/.well-known/bsvalias | jq .
 curl -s -X POST https://sns.ordnet.io/bsvalias/address/info@earthlog.web3 \
   -H 'content-type: application/json' -d '{}' | jq .
-# -> { "output": "76a914…88ac" }  — the current on-chain holder's locking script
+# -> { "output": "76a914…88ac" }  — the locking script the resolver reports
+#                                    for the current on-chain holder
 ```
+
+### What this bridge does and does not verify
+
+Be aware of this before you point money at it. The bridge **forwards** what the
+SNS resolver tells it. It checks that `holder_script` is well-formed hex and
+then makes it the payment destination — it does **not** verify a signature over
+that answer, does not check an expiry, and does not fold a merkle proof to the
+committed root.
+
+So the destination is exactly as trustworthy as the resolver connection: anyone
+who can answer as the resolver, or sit between the bridge and it, can choose
+where the money goes. **Run the bridge and the resolver on the same host**, or
+over a channel you control, until this is closed.
+
+Closing it properly means the resolver and the client speaking the same signed
+answer format; that is a protocol change rather than a patch, and it is tracked
+as an open issue. See [SECURITY.md](SECURITY.md) and
+[SECURITY-FIXES-v1.3.0.md](SECURITY-FIXES-v1.3.0.md).
 
 ## Tests
 
@@ -81,7 +100,7 @@ curl -s -X POST https://sns.ordnet.io/bsvalias/address/info@earthlog.web3 \
 npm test
 ```
 
-55 tests on bare Node: handle parsing, TLD gating, capability document,
+61 tests on bare Node: handle parsing, TLD gating, capability document,
 pki / paymentDestination / P2P flows, fallback disclosure, error shapes,
 and rate limiting.
 
