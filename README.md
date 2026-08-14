@@ -1,5 +1,11 @@
 # ORDnet-bsvalias-bridge
 
+[![tests](https://github.com/ORDNET/ORDnet-bsvalias-bridge/actions/workflows/test.yml/badge.svg)](https://github.com/ORDNET/ORDnet-bsvalias-bridge/actions/workflows/test.yml)
+[![test count](https://img.shields.io/badge/tests-61_passing-2b8a3e?style=flat-square)](#tests)
+[![dependencies](https://img.shields.io/badge/dependencies-zero-364fc7?style=flat-square)](#run)
+[![standard](https://img.shields.io/badge/implements-ODNCA--STD--009-5f3dc4?style=flat-square)](https://github.com/ORDNET/ODNCA-standards/blob/main/ODNCA-STD-009-Paymail-Compatibility-Profile.md)
+[![license](https://img.shields.io/badge/license-MIT-6a737d?style=flat-square)](LICENSE)
+
 Paymail (bsvalias) compatibility bridge for **native web3 names**: lets any
 existing paymail wallet (HandCash, Centbee, ElectrumSV, RelayX, …) pay
 `info@earthlog.web3` today — with its existing bsvalias client and **one
@@ -10,6 +16,13 @@ This is the reference implementation of
 live behind `https://sns.ordnet.io/.well-known/bsvalias`.
 
 **Zero dependencies.** Node ≥ 20 (built-in `fetch`). No `npm install`.
+
+**Wire-compatible with the paymail ecosystem.** The capability document
+advertises the standard bsvalias 1.0 set, including the server-to-server
+P2P pair under their canonical BRFC IDs — `2a40af698840`
+(p2p-payment-destination) and `5f1323cddf31` (receive-transaction) — the
+same capability IDs the established paymail wallets implement. A conforming
+bsvalias client needs no ORDnet-specific code to complete a payment.
 
 ## What it does
 
@@ -98,6 +111,7 @@ as an open issue. See [SECURITY.md](SECURITY.md) and
 
 ```bash
 npm test
+# -> RESULT: 61 passed, 0 failed
 ```
 
 61 tests on bare Node: handle parsing, TLD gating, capability document,
